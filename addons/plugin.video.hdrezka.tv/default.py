@@ -123,6 +123,7 @@ class HdrezkaTV:
             ('search', 'FF00FF00', 30000),
             ('history', 'FF00FF00', 30008),
             ('categories', 'FF00FF00', 30003),
+            ('categories_popular', 'FF00FF00', 30013),
             ('index', 'FFDDD2CC', 30009),
             ('index_popular', 'FFDDD2CC', 30010),
             ('index_soon', 'FFDDD2CC', 30011),
@@ -141,6 +142,8 @@ class HdrezkaTV:
         xbmcplugin.endOfDirectory(self.handle, True)
 
     def categories(self):
+        query_filter = router.parse_uri(sys.argv[2]).get('query_filter')
+
         response = self.make_response('GET', '/')
         genres = common.parseDOM(response.text, "ul", attrs={"id": "topnav-menu"})
 
@@ -148,12 +151,12 @@ class HdrezkaTV:
         links = common.parseDOM(genres, "a", attrs={"class": "b-topnav__item-link"}, ret='href')
         for i, title in enumerate(titles):
             title = common.stripTags(title)
-            item_uri = router.build_uri('sub_categories', uri=links[i])
+            item_uri = router.build_uri('sub_categories', uri=links[i], query_filter=query_filter)
             item = xbmcgui.ListItem(title)
             item.setArt({'thumb': self.icon})
             xbmcplugin.addDirectoryItem(self.handle, item_uri, item, True)
 
-        item_uri = router.build_uri('collections')
+        item_uri = router.build_uri('collections', query_filter=query_filter)
         item = xbmcgui.ListItem('Подборки')
         item.setArt({'thumb': self.icon})
         xbmcplugin.addDirectoryItem(self.handle, item_uri, item, True)
@@ -162,13 +165,15 @@ class HdrezkaTV:
         xbmcplugin.endOfDirectory(self.handle, True)
 
     def sub_categories(self, uri):
+        query_filter = router.parse_uri(sys.argv[2]).get('query_filter')
+
         response = self.make_response('GET', '/')
         genres = common.parseDOM(response.text, "ul", attrs={"class": "left"})
 
         titles = common.parseDOM(genres, "a")
         links = common.parseDOM(genres, "a", ret='href')
 
-        item_uri = router.build_uri('index', uri=uri)
+        item_uri = router.build_uri('index', uri=uri, query_filter=query_filter)
         item = xbmcgui.ListItem(f'[COLOR=FF00FFF0]{self.language(30007)}[/COLOR]')
         item.setArt({'thumb': self.icon})
         xbmcplugin.addDirectoryItem(self.handle, item_uri, item, True)
@@ -176,7 +181,7 @@ class HdrezkaTV:
         for i, title in enumerate(titles):
             if not links[i].startswith(uri):
                 continue
-            item_uri = router.build_uri('index', uri=links[i])
+            item_uri = router.build_uri('index', uri=links[i], query_filter=query_filter)
             item = xbmcgui.ListItem(title)
             item.setArt({'thumb': self.icon})
             xbmcplugin.addDirectoryItem(self.handle, item_uri, item, True)
@@ -185,6 +190,8 @@ class HdrezkaTV:
         xbmcplugin.endOfDirectory(self.handle, True)
 
     def collections(self, page):
+        query_filter = router.parse_uri(sys.argv[2]).get('query_filter')
+
         uri = '/collections/'
         if page != 1:
             uri = f'/collections/page/{page}/'
@@ -197,13 +204,13 @@ class HdrezkaTV:
         icons = common.parseDOM(content, "img", attrs={"class": "cover"}, ret="src")
 
         for i, name in enumerate(titles):
-            item_uri = router.build_uri('index', uri=router.normalize_uri(links[i]))
+            item_uri = router.build_uri('index', uri=router.normalize_uri(links[i]), query_filter=query_filter)
             item = xbmcgui.ListItem(f'{name} [COLOR=55FFFFFF]({counts[i]})[/COLOR]')
             item.setArt({'thumb': icons[i]})
             xbmcplugin.addDirectoryItem(self.handle, item_uri, item, True)
 
-        if not len(titles) < 32:
-            item_uri = router.build_uri('collections', page=page + 1)
+        if not len(titles) < 36:
+            item_uri = router.build_uri('collections', page=page + 1, query_filter=query_filter)
             item = xbmcgui.ListItem("[COLOR=orange]" + self.language(30004) + "[/COLOR]")
             item.setArt({'icon': self.icon_next})
             xbmcplugin.addDirectoryItem(self.handle, item_uri, item, True)
@@ -232,14 +239,18 @@ class HdrezkaTV:
         titles = common.parseDOM(link_containers, "a")
         div_covers = common.parseDOM(items, "div", attrs={"class": "b-content__inline_item-cover"})
 
-        country_years = common.parseDOM(link_containers, "div")
+        #country_years = common.parseDOM(link_containers, "div")
 
         for i, name in enumerate(titles):
             info = self.get_item_additional_info(post_ids[i])
-            title = helpers.built_title(name, country_years[i*2], **info)
+            
+            link_container = link_containers[i]
+            country_year = common.parseDOM(link_container, "div")
+            
+            title = helpers.built_title(name, country_year[0], **info)
             image = self._normalize_url(common.parseDOM(div_covers[i], "img", ret='src')[0])
             item_uri = router.build_uri('show', uri=router.normalize_uri(links[i]))
-            year, country, genre = helpers.get_media_attributes(country_years[i*2])
+            year, country, genre = helpers.get_media_attributes(country_year[0])
             item = xbmcgui.ListItem(title)
             item.setArt({'thumb': image, 'icon': image})
             item.setInfo(
@@ -258,6 +269,8 @@ class HdrezkaTV:
             if (self.quality != 'select') and not is_serial:
                 item.setProperty('IsPlayable', 'true')
                 is_folder = False
+            if not is_serial:
+                item.addContextMenuItems([('Show collections', router.build_uri('index'))])
             xbmcplugin.addDirectoryItem(self.handle, item_uri, item, is_folder)
 
         if not len(titles) < 16:
@@ -309,6 +322,9 @@ class HdrezkaTV:
             images = common.parseDOM(title, 'img', ret='title')
             for img in images:
                 titles[index] += f' ({img})'
+
+        if len(titles) == 0:
+            return tv_show, idt, None
 
         if len(titles) > 1:
             dialog = xbmcgui.Dialog()
@@ -400,18 +416,30 @@ class HdrezkaTV:
                 xbmcplugin.addDirectoryItem(self.handle, item_uri, item, True if self.quality == 'select' else False)
         else:
             content = [response.text]
-            if self.translator == "select":
-                content, idt, subtitles = self.select_translator(content[0], content, post_id, uri, idt, "get_movie")
-                if subtitles is None:
-                    # when action == get_movie, None is returned only when some exception occurs,
-                    # so we set the streams_block to default
-                    streams_block = re.search(r'"streams":"([^"]+)', response.text).group(1)
+            try:
+                if self.translator == "select":
+                    content, idt, subtitles = self.select_translator(content[0], content, post_id, uri, idt, "get_movie")
+                    if subtitles is None:
+                        # when action == get_movie, None is returned only when some exception occurs,
+                        # so we set the streams_block to default
+                        streams_block = re.search(r'"streams":"([^"]+)', response.text).group(1)
+                    else:
+                        # success, get selected translator streams
+                        streams_block = content[0]
                 else:
-                    # success, get selected translator streams
-                    streams_block = content[0]
-            else:
-                # use default streams_block if translator is not in "select"
-                streams_block = re.search(r'"streams":"([^"]+)', response.text).group(1)
+                    # use default streams_block if translator is not in "select"
+                    streams_block = re.search(r'"streams":"([^"]+)', response.text).group(1)
+            except:
+                try:
+                    # <span class="b-player__restricted__block_message">
+                    blockText = common.parseDOM(response.text, "span", attrs={"class": "b-player__restricted__block_message"})[0]
+                    blockText = re.sub('<[^<]+?>', '', blockText)
+                except:
+                    blockText = 'Unknown error'
+                
+                xbmcgui.Dialog().ok('Error', blockText)
+                return
+            
             links = parse_streams(streams_block)
             self.select_quality(links, title, image, subtitles)
 

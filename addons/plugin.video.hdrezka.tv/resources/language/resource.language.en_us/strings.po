@@ -68,3 +68,7 @@ msgstr ""
 msgctxt "#30012"
 msgid "Сейчас смотрят"
 msgstr ""
+
+msgctxt "#30013"
+msgid "Популярные по категориям"
+msgstr ""

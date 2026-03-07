@@ -20,7 +20,11 @@ def busy_dialog():
 
 def get_media_attributes(source):
     items = source.split(',')
-    if len(items) == 3:
+    if len(items) <= 1:
+        year = '?'
+        country = '?' 
+        genre = '?'
+    elif len(items) == 3:
         year, country, genre = items
     else:
         year, genre = items
