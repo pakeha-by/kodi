@@ -20,11 +20,8 @@ def parse_streams(salted):
         for bk in BK_BLOCKS:
             salted = salted.replace(BK_SEP + bk, '')
 
-        helpers.log('Stripped salted string')
-        helpers.log(salted)
         decoded_streams = base64.b64decode(salted[2:]).decode('utf-8')
-
-    except Exception as e:
+    except:
         decoded_streams = origin
 
     parsed_streams = []

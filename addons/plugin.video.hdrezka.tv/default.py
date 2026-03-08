@@ -212,7 +212,7 @@ class HdrezkaTV:
             item.setArt({'thumb': icons[i]})
             xbmcplugin.addDirectoryItem(self.handle, item_uri, item, True)
 
-        if not len(titles) < 36:
+        if not len(titles) < 32:
             item_uri = router.build_uri('collections', page=page + 1, query_filter=query_filter)
             item = xbmcgui.ListItem("[COLOR=orange]" + self.language(30004) + "[/COLOR]")
             item.setArt({'icon': self.icon_next})
@@ -226,20 +226,19 @@ class HdrezkaTV:
 
         uri = '/favorites/'
         response = self.make_response('GET', uri)
-        collection_texts = common.parseDOM(response.text, "a", attrs={"class": "b-favorites_content__cats_list_link active"}) + common.parseDOM(response.text, "a", attrs={"class": "b-favorites_content__cats_list_link"})
-        collection_links = common.parseDOM(response.text, "a", attrs={"class": "b-favorites_content__cats_list_link"}, ret="href") + common.parseDOM(response.text, "a", attrs={"class": "b-favorites_content__cats_list_link"}, ret="href")
+
+        collections = common.parseDOM(response.text, 'div', attrs={'class': 'b-userset__fav_holder_data'})
+
+        collection_texts = common.parseDOM(collections, "a")
+        collection_links = common.parseDOM(collections, "a", ret="href")
 
         for i, link in enumerate(collection_links):
-            helpers.log(f'fav collection link: {link}')
-            try:
-                href = collection_links[i]
-                title = helpers.html_to_text(collection_texts[i])
-                item_uri = router.build_uri('index', uri=router.normalize_uri(href), query_filter=query_filter)
-                item = xbmcgui.ListItem(f'{title} [COLOR=55FFFFFF][/COLOR]')
-                xbmcplugin.addDirectoryItem(self.handle, item_uri, item, True)
-            except Exception as ex:
-                helpers.log(f'fault parse fav collection link: {link} ex: {ex}')
+            if link.find('/favorites/') == -1:
                 continue
+            title = helpers.html_to_text(collection_texts[i])
+            item_uri = router.build_uri('index', uri=router.normalize_uri(link), query_filter=query_filter)
+            item = xbmcgui.ListItem(f'{title} [COLOR=55FFFFFF][/COLOR]')
+            xbmcplugin.addDirectoryItem(self.handle, item_uri, item, True)
 
         xbmcplugin.setContent(self.handle, 'files')
         xbmcplugin.endOfDirectory(self.handle, True)
@@ -444,29 +443,26 @@ class HdrezkaTV:
                 xbmcplugin.addDirectoryItem(self.handle, item_uri, item, True if self.quality == 'select' else False)
         else:
             content = [response.text]
-            try:
-                if self.translator == "select":
-                    content, idt, subtitles = self.select_translator(content[0], content, post_id, uri, idt, "get_movie")
-                    if subtitles is None:
-                        # when action == get_movie, None is returned only when some exception occurs,
-                        # so we set the streams_block to default
-                        streams_block = re.search(r'"streams":"([^"]+)', response.text).group(1)
-                    else:
-                        # success, get selected translator streams
-                        streams_block = content[0]
-                else:
-                    # use default streams_block if translator is not in "select"
-                    streams_block = re.search(r'"streams":"([^"]+)', response.text).group(1)
-            except:
-                try:
-                    # <span class="b-player__restricted__block_message">
-                    blockText = common.parseDOM(response.text, "span", attrs={"class": "b-player__restricted__block_message"})[0]
-                    blockText = helpers.html_to_text(blockText)
-                except:
-                    blockText = 'Unknown error'
-                
+
+            # Might be blocked <span class="b-player__restricted__block_message">
+            blockText = common.parseDOM(response.text, "span", attrs={"class": "b-player__restricted__block_message"})
+            if (len(blockText) > 0):
+                blockText = helpers.html_to_text(blockText[0])
                 xbmcgui.Dialog().ok('Error', blockText)
                 return
+
+            if self.translator == "select":
+                content, idt, subtitles = self.select_translator(content[0], content, post_id, uri, idt, "get_movie")
+                if subtitles is None:
+                    # when action == get_movie, None is returned only when some exception occurs,
+                    # so we set the streams_block to default
+                    streams_block = re.search(r'"streams":"([^"]+)', response.text).group(1)
+                else:
+                    # success, get selected translator streams
+                    streams_block = content[0]
+            else:
+                # use default streams_block if translator is not in "select"
+                streams_block = re.search(r'"streams":"([^"]+)', response.text).group(1)
             
             links = parse_streams(streams_block)
             self.select_quality(links, title, image, subtitles)
