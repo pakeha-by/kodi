@@ -1,4 +1,5 @@
 import json
+import re
 from contextlib import contextmanager
 
 from requests.cookies import cookiejar_from_dict
@@ -43,6 +44,9 @@ def color_rating(rating):
     elif rating >= 7:
         return '[COLOR=green][%s][/COLOR]' % rating
 
+def html_to_text(html):
+    html = re.sub('<[^<]+?>', '', html)
+    return html.replace('<br>', '\n').replace('&quot;', '"').replace('&amp;', '&').replace('&nbsp;', ' ').strip()    
 
 def built_title(name, country_years, **kwargs):
     colored_rating = color_rating(kwargs["rating"]["site"])

@@ -113,6 +113,8 @@ class HdrezkaTV:
             self.search(params.get('keyword'), external)
         elif mode == 'history':
             self.history()
+        elif mode == 'favorites':
+            self.fav_collections()
         elif mode == 'collections':
             self.collections(int(params.get('page', 1)))
         else:
@@ -128,6 +130,7 @@ class HdrezkaTV:
             ('index_popular', 'FFDDD2CC', 30010),
             ('index_soon', 'FFDDD2CC', 30011),
             ('index_watching', 'FFDDD2CC', 30012),
+            ('favorites', 'FF00FFFF', 30014),
         )
         for mode, color, translation_id in menu_items:
             uri = router.build_uri(mode)
@@ -218,6 +221,30 @@ class HdrezkaTV:
         xbmcplugin.setContent(self.handle, 'files')
         xbmcplugin.endOfDirectory(self.handle, True)
 
+    def fav_collections(self):
+        query_filter = router.parse_uri(sys.argv[2]).get('query_filter')
+
+        uri = '/favorites/'
+        response = self.make_response('GET', uri)
+        collection_texts = common.parseDOM(response.text, "a", attrs={"class": "b-favorites_content__cats_list_link active"}) + common.parseDOM(response.text, "a", attrs={"class": "b-favorites_content__cats_list_link"})
+        collection_links = common.parseDOM(response.text, "a", attrs={"class": "b-favorites_content__cats_list_link"}, ret="href") + common.parseDOM(response.text, "a", attrs={"class": "b-favorites_content__cats_list_link"}, ret="href")
+
+        for i, link in enumerate(collection_links):
+            helpers.log(f'fav collection link: {link}')
+            try:
+                href = collection_links[i]
+                title = helpers.html_to_text(collection_texts[i])
+                item_uri = router.build_uri('index', uri=router.normalize_uri(href), query_filter=query_filter)
+                item = xbmcgui.ListItem(f'{title} [COLOR=55FFFFFF][/COLOR]')
+                xbmcplugin.addDirectoryItem(self.handle, item_uri, item, True)
+            except Exception as ex:
+                helpers.log(f'fault parse fav collection link: {link} ex: {ex}')
+                continue
+
+        xbmcplugin.setContent(self.handle, 'files')
+        xbmcplugin.endOfDirectory(self.handle, True)
+
+
     def index(self, uri=None, page=None, query_filter=None):
         url = uri
         if not url:
@@ -229,6 +256,9 @@ class HdrezkaTV:
 
         response = self.make_response('GET', url)
         content = common.parseDOM(response.text, "div", attrs={"class": "b-content__inline_items"})
+        if len(content) == 0:
+            # favorites
+            content = common.parseDOM(response.text, "div", attrs={"class": "b-content__inline_items b-favorites_content__holder"})
 
         items = common.parseDOM(content, "div", attrs={"class": "b-content__inline_item"})
         post_ids = common.parseDOM(content, "div", attrs={"class": "b-content__inline_item"}, ret="data-id")
@@ -238,8 +268,6 @@ class HdrezkaTV:
         links = common.parseDOM(link_containers, "a", ret='href')
         titles = common.parseDOM(link_containers, "a")
         div_covers = common.parseDOM(items, "div", attrs={"class": "b-content__inline_item-cover"})
-
-        #country_years = common.parseDOM(link_containers, "div")
 
         for i, name in enumerate(titles):
             info = self.get_item_additional_info(post_ids[i])
@@ -433,7 +461,7 @@ class HdrezkaTV:
                 try:
                     # <span class="b-player__restricted__block_message">
                     blockText = common.parseDOM(response.text, "span", attrs={"class": "b-player__restricted__block_message"})[0]
-                    blockText = re.sub('<[^<]+?>', '', blockText)
+                    blockText = helpers.html_to_text(blockText)
                 except:
                     blockText = 'Unknown error'
                 

@@ -72,3 +72,7 @@ msgstr ""
 msgctxt "#30013"
 msgid "Популярные по категориям"
 msgstr ""
+
+msgctxt "#30014"
+msgid "Мои закладки"
+msgstr ""
